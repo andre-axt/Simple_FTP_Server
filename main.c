@@ -5,6 +5,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <signal.h>
+#include <sys/types.h>
+
 
 sig_atomic_t serverstate = 1;
 
@@ -19,6 +21,7 @@ int main() {
     socklen_t client_len = sizeof(client_addr);
     int bytes_received;
     char message[100];
+    pid_t pid;
 
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (server_socket < 0) {
@@ -45,34 +48,43 @@ int main() {
     printf("FTP server is listening on port 2121...\n");
     printf("Connect: ftp localhost 2121\n");
 
-    client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_len);
-    if (client_socket < 0) {
-        perror("Error in accept\n");
-        close(server_socket);
-        exit(1);
-    }
-
-    printf("Client Connected\n");
-    send(client_socket, "mensage: ", 10, 0);
     while(1){
-        memset(message, 0, sizeof(message));
-        bytes_received = recv(client_socket, message, sizeof(message) - 1, 0);
-        if(bytes_received <= 0){
-            break;
+        
+        client_socket = accept(server_socket, (struct sockaddr *)&client_addr, &client_len);
+        if (client_socket < 0) {
+            perror("Error in accept\n");
+            close(server_socket);
+            exit(1);
         }
-        send(client_socket, "mensage: ", 10, 0);
-        printf("Client said: %s", message);
-
-        if(strncmp(message, "quit", 4) == 0) {
-            printf("Client requested quit\n");
-            break;
+        pid = fork();
+        if (pid < 0) {
+            exit(1);
+            close(client_socket);
         }
+        if (pid == 0) {
+            close(server_socket);
+            printf("Client Connected\n");
+            send(client_socket, "mensage: ", 10, 0);
+            while(1){
+                memset(message, 0, sizeof(message));
+                bytes_received = recv(client_socket, message, sizeof(message) - 1, 0);
+                if(bytes_received <= 0){
+                    break;
+                }
+                send(client_socket, "mensage: ", 10, 0);
+                printf("Client said: %s", message);
+        
+                if(strncmp(message, "quit", 4) == 0) {
+                    printf("Client requested quit\n");
+                    break;
+                }
+            }
+        } else {
+            printf("Connection closed\n");    
+            close(client_socket);
+        }
+    
     }
-
-
-    close(client_socket);
-    close(server_socket);
-    printf("Connection closed\n");
 
     return 0;
 }
